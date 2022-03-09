@@ -1,5 +1,5 @@
-# Revews Shopify Docker
-This project is a core system of Revews Shopify Web.
+# Alien Diary
+An opensource project for personal blogging 
 
 ### Docker Services
 - nginx
@@ -25,9 +25,6 @@ chmod +x ./commander
 
 After, run this command and go to sleep.
 
-```shell
-./Revews Shopify ready
-```
 To show all the running process, run the command below
 
 ```shell
