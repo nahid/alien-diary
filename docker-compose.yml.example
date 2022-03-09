@@ -1,0 +1,142 @@
+version: '3'
+services:
+    nginx:
+        image: nginx:latest
+        container_name: rvws_nginx
+        volumes:
+            - ./.docker/nginx/nginx.conf:/etc/nginx/nginx.conf #app and admin panel
+            - ./.docker/nginx/app/local.conf:/etc/nginx/conf.d/default.conf #app and admin panel
+            - ./.docker/nginx/socket/local.conf:/etc/nginx/conf.d/socket.stream #tcp socket
+            #- ./.docker/nginx/web/local.conf:/etc/nginx/conf.d/web.conf #frontend
+            - ./.docker/nginx/logs:/var/log/nginx
+            - ./app:/var/www/app
+            #- ./.docker/data/certs/certbot/conf:/etc/letsencrypt #uncomment when production deploy
+            #- ./.docker/data/certs/certbot/www:/var/www/certbot #uncomment when production deploy
+        ports:
+          - 8002:80
+          - 1215:1215
+         #- 443:443 #uncomment when production deploy
+         #- 80:80 #uncomment when production deploy
+        depends_on:
+          - app
+        networks:
+          - rvws_shopify_network
+        environment:
+          - X_SERVER_TYPE=nginx
+
+    app:
+        build:
+          context: .
+          dockerfile: .docker/app/Dockerfile
+        container_name: rvws_app
+        volumes:
+          - ./app:/var/www/app
+        restart: always
+        networks:
+          - rvws_shopify_network
+        environment:
+          - X_SERVER_TYPE=app
+
+    web:
+        build:
+          context: .
+          dockerfile: .docker/web/Dockerfile
+        container_name: rvws_web
+        stdin_open: true
+        volumes:
+          - ./web:/usr/src/web
+          - /usr/src/web/node_modules
+        env_file:
+          - web/.env
+        networks:
+          - rvws_shopify_network
+        environment:
+          - X_SERVER_TYPE=web
+
+    worker:
+        build:
+          context: .
+          dockerfile: .docker/worker/Dockerfile
+        container_name: rvws_worker
+        volumes:
+          - ./app:/var/www/app
+          - ./.docker/data/worker/logs:/var/log
+        networks:
+          - rvws_shopify_network
+        environment:
+          - X_SERVER_TYPE=worker
+
+    
+    database:
+        container_name: rvws_database
+        image: postgres
+        environment:
+          POSTGRES_USER: ${DB_USERNAME}
+          POSTGRES_PASSWORD: ${DB_PASSWORD}
+          POSTGRES_DB: ${DB_DATABASE}
+          PGDATA: /data/postgres
+          X_SERVER_TYPE: app
+        volumes:
+          - ./.docker/data/postgres:/data/postgres
+        ports:
+          - "5433:5432"
+        # restart: unless-stopped
+        restart: always
+        networks:
+          - rvws_shopify_network
+
+    redis:
+        image: redis:latest
+        container_name: rvws_redis
+        ports:
+          - ${REDIS_EXPOSE_PORT}:6379
+        volumes:
+          - ./.docker/data/redis:/data
+        entrypoint: redis-server --appendonly yes
+        restart: always
+        networks:
+          - rvws_shopify_network
+    mailhog:
+      image: mailhog/mailhog
+      container_name: rvws_mailhog
+      logging:
+        driver: 'none'  # disable saving logs
+      ports:
+        - 1026:1025 # smtp server
+        - 8026:8025 # web ui
+      networks:
+        - rvws_shopify_network
+
+    certbot:
+        image: certbot/certbot
+        container_name: rvws_certbot
+        restart: unless-stopped
+        volumes:
+          - ./.docker/data/certs/certbot/conf:/etc/letsencrypt
+          - ./.docker/data/certs/certbot/www:/var/www/certbot
+        networks:
+          - rvws_shopify_network
+        entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+    ngrok:
+          image: wernight/ngrok:latest
+          ports:
+              - 4040:4040
+          environment:
+              NGROK_PROTOCOL: http
+              NGROK_PORT: nginx:80
+              NGROK_AUTH: ${NGROK_AUTH}
+          depends_on:
+              - nginx
+          networks:
+              - rvws_shopify_network
+
+volumes:
+  database:
+    driver: local
+  redis:
+    driver: local
+
+networks:
+  rvws_shopify_network:
+    driver: bridge

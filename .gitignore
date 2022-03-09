@@ -1,0 +1,9 @@
+app
+!.docker/app
+!.docker/nginx/app
+docker-compose.yml
+make-ssl.sh
+.docker/data/*
+!.docker/data/certs
+.idea
+.DS_Store

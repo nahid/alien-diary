@@ -1,0 +1,90 @@
+#!/bin/bash
+
+#######################################
+# Print a message in a given color.
+# Arguments:
+#   Color. eg: green, red
+#######################################
+function print_color(){
+  NC='\033[0m' # No Color
+
+  case $1 in
+    "green") COLOR='\033[0;32m' ;;
+    "red") COLOR='\033[0;31m' ;;
+    "*") COLOR='\033[0m' ;;
+  esac
+
+  echo -e "${COLOR} $2 ${NC}"
+}
+
+if ! [ -x "$(command -v docker)" ]; then
+  print_color "red" 'Error: docker is not installed.' >&2
+  exit 1
+fi
+
+if ! [ -x "$(command -v docker-compose)" ]; then
+  print_color "red" 'Error: docker-compose is not installed.' >&2
+  exit 1
+fi
+
+if [ $# -eq 0 ]; then
+    print_color "red" "No command found"
+    exit
+fi
+
+if [ -d /app ]   # For file "if [ -f /home/jouleslabs/file ]"
+then
+  print_color "green" "app directory present.Going next.."
+else
+  print_color "red" "app directory is not present.Download from git................"
+  git clone git@github.com:JoulesLabs/cassetex-app.git app
+fi 
+
+if [ $1 == "ready" ]; then
+    print_color "green" "-------go to app dir and doing necessary -------"
+    cd app
+    if [ -e .env ]
+    then
+        print_color "green" ".env is already exists"
+    else
+        print_color "red" "Making .env file ..."
+        cp .env.example .env
+    fi
+
+    source .env
+    cd .. 
+
+    if [ -e docker-compose.yml ]
+    then
+        print_color "green" "docker-compose.yml is already exists"
+    else
+        print_color "red" "Making docker-compose.yml file ..."
+        cp docker-compose.yml.example docker-compose.yml
+    fi
+
+    COMPOSE="docker-compose -f docker-compose.yml"
+
+    print_color "green" "Setting permission for docker/app/init.sh ..."
+    chmod a+x .docker/app/init.sh
+
+    print_color "green" "Build and Run docker images ..."
+    $COMPOSE up -d --build
+
+    print_color "green" "Resolve dependencies ..."
+    $COMPOSE exec app composer install
+
+    print_color "green" "Migrating database"
+    $COMPOSE exec app php artisan migrate
+
+    print_color "green" "Seeding database"
+    $COMPOSE exec app php artisan db:seed
+
+    print_color "green" "Cassetex project is ready to use"
+    print_color "green" "Thank you"
+fi
+
+if [ $1 == "about" ]; then
+    print_color "green" "Inspird & Copied From - Nahid Bin Azhar"
+    print_color "green" "Updated By - Shamir Imtiaz"
+    print_color "green" "Email - nahid.dns@gmail.com"
+fi
